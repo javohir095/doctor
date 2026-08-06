@@ -1,0 +1,21 @@
+import type { SVGProps } from "react"
+
+/** Custom tooth glyph, drawn to match lucide-react's stroke conventions
+ * (24x24 viewBox, round caps/joins, 2px stroke) since lucide has no tooth
+ * icon of its own — used as the clinic's brand mark throughout the app. */
+export function ToothIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M12 3c-2.1 0-3.2 1.1-4.5 1.1C5.8 4.1 4 3.3 4 6.2c0 2.4.9 3.2 1.1 5.7.2 2.6.9 8.6 2.8 8.6 1.6 0 1.5-3.5 2-5.3.3-1.2.6-2 2.1-2s1.8.8 2.1 2c.5 1.8.4 5.3 2 5.3 1.9 0 2.6-6 2.8-8.6.2-2.5 1.1-3.3 1.1-5.7 0-2.9-1.8-2.1-3.5-2.1C15.2 4.1 14.1 3 12 3Z" />
+    </svg>
+  )
+}
