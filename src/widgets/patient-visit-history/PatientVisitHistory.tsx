@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { format } from "date-fns"
 import { History } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -7,10 +8,13 @@ import { usePatientAppointments } from "@/entities/appointments/api/queries"
 import {
   APPOINTMENT_STATUS_BADGE,
   APPOINTMENT_STATUS_LABELS,
+  type AppointmentWithRelations,
 } from "@/entities/appointments/model/types"
+import { AppointmentDetailSheet } from "@/widgets/appointment-calendar/AppointmentDetailSheet"
 
 export function PatientVisitHistory({ patientId }: { patientId: string }) {
   const { data: appointments, isLoading } = usePatientAppointments(patientId)
+  const [selected, setSelected] = useState<AppointmentWithRelations | null>(null)
 
   if (isLoading) {
     return (
@@ -28,9 +32,11 @@ export function PatientVisitHistory({ patientId }: { patientId: string }) {
   return (
     <div className="space-y-3">
       {appointments.map((appt) => (
-        <div
+        <button
           key={appt.id}
-          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border bg-card p-4"
+          type="button"
+          onClick={() => setSelected(appt)}
+          className="flex w-full flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent hover:border-primary/30"
         >
           <div>
             <p className="font-medium">
@@ -44,11 +50,17 @@ export function PatientVisitHistory({ patientId }: { patientId: string }) {
               <p className="text-sm text-muted-foreground mt-1">{appt.notes}</p>
             )}
           </div>
-          <Badge variant={APPOINTMENT_STATUS_BADGE[appt.status]}>
+          <Badge variant={APPOINTMENT_STATUS_BADGE[appt.status]} className="shrink-0">
             {APPOINTMENT_STATUS_LABELS[appt.status]}
           </Badge>
-        </div>
+        </button>
       ))}
+
+      <AppointmentDetailSheet
+        appointment={selected}
+        open={!!selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+      />
     </div>
   )
 }

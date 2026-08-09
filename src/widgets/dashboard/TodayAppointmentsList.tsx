@@ -37,7 +37,7 @@ export function TodayAppointmentsList({
           appointments.map((a) => (
             <Link
               key={a.id}
-              to="/appointments"
+              to={`/patients/${a.patient_id}`}
               className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 hover:bg-accent transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">

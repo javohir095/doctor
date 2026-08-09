@@ -34,7 +34,7 @@ function BrandHeader({ clinicName }: { clinicName: string }) {
   return (
     <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border">
       <Logo size="sm" />
-      <span className="font-semibold truncate leading-tight">{clinicName}</span>
+      <span className="font-heading text-lg font-bold truncate leading-tight">{clinicName}</span>
     </div>
   )
 }

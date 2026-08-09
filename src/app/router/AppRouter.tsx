@@ -8,6 +8,8 @@ import { ServicesPage } from "@/pages/services/ServicesPage"
 import { AppointmentsPage } from "@/pages/appointments/AppointmentsPage"
 import { BotSettingsPage } from "@/pages/settings/BotSettingsPage"
 import { BranchesPage } from "@/pages/branches/BranchesPage"
+import { InventoryPage } from "@/pages/inventory/InventoryPage"
+import { ReportsPage } from "@/pages/reports/ReportsPage"
 import { AllStaffPage } from "@/pages/superadmin/AllStaffPage"
 import { ProtectedLayout } from "./ProtectedLayout"
 import { RoleGate } from "./RoleGate"
@@ -48,6 +50,22 @@ export function AppRouter() {
           element={
             <RoleGate roles={["owner"]}>
               <ServicesPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RoleGate roles={["owner", "admin"]}>
+              <ReportsPage />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="/inventory"
+          element={
+            <RoleGate roles={["owner", "admin"]}>
+              <InventoryPage />
             </RoleGate>
           }
         />

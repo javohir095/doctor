@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/form"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PatientCombobox } from "@/shared/ui/PatientCombobox"
+import { DatePicker } from "@/shared/ui/DatePicker"
 import { useProfile } from "@/entities/session/api/queries"
 import { useDoctors } from "@/entities/doctors/api/queries"
 import { useServices } from "@/entities/services/api/queries"
@@ -55,10 +56,22 @@ const appointmentSchema = z.object({
 type AppointmentInput = z.input<typeof appointmentSchema>
 type AppointmentValues = z.output<typeof appointmentSchema>
 
-export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
+export function NewAppointmentDialog({
+  defaultDate,
+  fixedPatient,
+  trigger,
+}: {
+  defaultDate: Date
+  /** When set, books for this patient directly and hides the patient picker
+   * — used from the patient detail page, where the patient is already known. */
+  fixedPatient?: { id: string; full_name: string }
+  trigger?: ReactNode
+}) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [patient, setPatient] = useState<{ id: string; full_name: string } | null>(null)
+  const [patient, setPatient] = useState<{ id: string; full_name: string } | null>(
+    fixedPatient ?? null
+  )
   const { data: profile } = useProfile()
   const { data: doctors } = useDoctors()
   const { data: services } = useServices(true)
@@ -67,7 +80,7 @@ export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
   const form = useForm<AppointmentInput, unknown, AppointmentValues>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
-      patientId: "",
+      patientId: fixedPatient?.id ?? "",
       doctorId: profile?.role === "doctor" ? profile.id : "",
       date: toDateInputValue(defaultDate),
       time: "09:00",
@@ -105,7 +118,7 @@ export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
       toast.success("Navbat yaratildi")
       setOpen(false)
       form.reset()
-      setPatient(null)
+      setPatient(fixedPatient ?? null)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Navbat yaratishda xatolik")
     }
@@ -114,14 +127,18 @@ export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="size-4" />
-          Yangi navbat
-        </Button>
+        {trigger ?? (
+          <Button>
+            <Plus className="size-4" />
+            Yangi navbat
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Yangi navbat yaratish</DialogTitle>
+          <DialogTitle>
+            {fixedPatient ? `${fixedPatient.full_name} — yangi navbat` : "Yangi navbat yaratish"}
+          </DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -130,25 +147,27 @@ export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <FormField
-              control={form.control}
-              name="patientId"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Bemor</FormLabel>
-                  <FormControl>
-                    <PatientCombobox
-                      value={patient}
-                      onChange={(p) => {
-                        setPatient(p)
-                        form.setValue("patientId", p.id)
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!fixedPatient && (
+              <FormField
+                control={form.control}
+                name="patientId"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Bemor</FormLabel>
+                    <FormControl>
+                      <PatientCombobox
+                        value={patient}
+                        onChange={(p) => {
+                          setPatient(p)
+                          form.setValue("patientId", p.id)
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="doctorId"
@@ -185,7 +204,7 @@ export function NewAppointmentDialog({ defaultDate }: { defaultDate: Date }) {
                   <FormItem>
                     <FormLabel>Sana</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <DatePicker value={field.value} onChange={field.onChange} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

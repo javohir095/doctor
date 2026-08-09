@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UZ_PHONE_REGEX, formatUzPhone } from "@/shared/lib/phone"
 import { EmptyState } from "@/shared/ui/EmptyState"
+import { DatePicker } from "@/shared/ui/DatePicker"
 import { useProfile } from "@/entities/session/api/queries"
 import { usePatients } from "@/entities/patients/api/queries"
 import { createPatient } from "@/entities/patients/api/mutations"
@@ -114,6 +115,7 @@ function AddPatientDialog() {
               )}
             />
             <FormField
+          
               control={form.control}
               name="phone"
               render={({ field }) => (
@@ -133,7 +135,12 @@ function AddPatientDialog() {
                 <FormItem>
                   <FormLabel>Tug'ilgan sana</FormLabel>
                   <FormControl>
-                    <Input type="date" autoComplete="off" {...field} />
+                    <DatePicker
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      fromYear={new Date().getFullYear() - 100}
+                      toYear={new Date().getFullYear()}
+                    />
                   </FormControl>
                   <FormDescription>Ixtiyoriy</FormDescription>
                   <FormMessage />

@@ -6,6 +6,8 @@ import {
   Receipt,
   Bot,
   Building2,
+  Boxes,
+  FileBarChart,
   type LucideIcon,
 } from "lucide-react"
 import type { UserRole } from "@/entities/session/model/types"
@@ -53,6 +55,18 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Xizmatlar / Narxlar",
     icon: Receipt,
     roles: ["owner"],
+  },
+  {
+    to: "/reports",
+    label: "Hisobotlar",
+    icon: FileBarChart,
+    roles: ["owner", "admin"],
+  },
+  {
+    to: "/inventory",
+    label: "Ombor",
+    icon: Boxes,
+    roles: ["owner", "admin"],
   },
   {
     to: "/branches",

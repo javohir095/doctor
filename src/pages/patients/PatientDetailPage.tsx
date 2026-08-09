@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, ShieldAlert } from "lucide-react"
+import { format } from "date-fns"
+import { ArrowLeft, CalendarPlus, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Form,
@@ -20,7 +23,8 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Skeleton } from "@/components/ui/skeleton"
-import { UZ_PHONE_REGEX, formatUzPhone } from "@/shared/lib/phone"
+import { DatePicker } from "@/shared/ui/DatePicker"
+import { UZ_PHONE_REGEX } from "@/shared/lib/phone"
 import { useProfile } from "@/entities/session/api/queries"
 import { usePatient, usePatientMedicalNotes } from "@/entities/patients/api/queries"
 import {
@@ -30,21 +34,43 @@ import {
 } from "@/entities/patients/api/mutations"
 import { PatientVisitHistory } from "@/widgets/patient-visit-history/PatientVisitHistory"
 import { PatientTreatmentTab } from "@/widgets/patient-treatment/PatientTreatmentTab"
+import { PatientOdontogramTab } from "@/widgets/odontogram/PatientOdontogramTab"
+import { NewAppointmentDialog } from "@/widgets/appointment-calendar/NewAppointmentDialog"
 
 const infoSchema = z.object({
   full_name: z.string().min(2, "Ism-familiyani kiriting"),
   phone: z.string().regex(UZ_PHONE_REGEX, "Format: +998901234567"),
   birth_date: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
+  medical_notes: z.string().optional(),
 })
 
 type InfoValues = z.infer<typeof infoSchema>
 
-function PatientInfoForm({ patientId }: { patientId: string }) {
-  const { data: patient, isLoading } = usePatient(patientId)
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
+}
+
+/** Single card covering both patient identity fields and the allergy/chronic
+ * notes — previously two separate forms with two separate save buttons.
+ * Permissions still differ per field group (owner/admin edit the identity
+ * fields, owner/treating-doctor edit medical notes, admin never sees medical
+ * notes at all), but they now share one form and one submit. */
+function PatientInfoCard({ patientId }: { patientId: string }) {
+  const { data: patient, isLoading: patientLoading } = usePatient(patientId)
+  const { data: medicalNotes, isLoading: notesLoading } = usePatientMedicalNotes(patientId)
   const { data: profile } = useProfile()
   const queryClient = useQueryClient()
-  const canEdit = profile?.role === "owner" || profile?.role === "admin"
+
+  const canEditInfo = profile?.role === "owner" || profile?.role === "admin"
+  // Admin's RLS grant excludes patient_medical_notes entirely — medical data
+  // stays doctor/owner-only, so keep the section out of their view.
+  const canSeeMedical = profile?.role === "owner" || profile?.role === "doctor"
 
   const form = useForm<InfoValues>({
     resolver: zodResolver(infoSchema),
@@ -54,183 +80,181 @@ function PatientInfoForm({ patientId }: { patientId: string }) {
           phone: patient.phone,
           birth_date: patient.birth_date ?? "",
           address: patient.address ?? "",
+          medical_notes: medicalNotes?.notes ?? "",
         }
       : undefined,
   })
 
   async function onSubmit(values: InfoValues) {
-    try {
-      await updatePatient(patientId, {
-        full_name: values.full_name,
-        phone: values.phone,
-        birth_date: values.birth_date || null,
-        address: values.address || null,
-      })
-      await queryClient.invalidateQueries({ queryKey: ["patient", patientId] })
-      await queryClient.invalidateQueries({ queryKey: ["patients"] })
-      toast.success("Ma'lumotlar saqlandi")
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Saqlashda xatolik")
-    }
-  }
-
-  if (isLoading || !patient) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-      </div>
-    )
-  }
-
-  if (!canEdit) {
-    return (
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Ism-familiya</dt>
-          <dd className="font-medium">{patient.full_name}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Telefon</dt>
-          <dd className="font-medium">{formatUzPhone(patient.phone)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Tug'ilgan sana</dt>
-          <dd className="font-medium">{patient.birth_date ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Manzil</dt>
-          <dd className="font-medium">{patient.address ?? "—"}</dd>
-        </div>
-      </dl>
-    )
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-w-md">
-        <FormField
-          control={form.control}
-          name="full_name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Ism-familiya</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Telefon</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="birth_date"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Tug'ilgan sana</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="address"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Manzil</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          Saqlash
-        </Button>
-      </form>
-    </Form>
-  )
-}
-
-function MedicalNotesCard({ patientId }: { patientId: string }) {
-  const { data: profile } = useProfile()
-  const { data: medicalNotes, isLoading } = usePatientMedicalNotes(patientId)
-  const [notes, setNotes] = useState("")
-  const [isSaving, setIsSaving] = useState(false)
-  const queryClient = useQueryClient()
-
-  useEffect(() => {
-    if (medicalNotes) setNotes(medicalNotes.notes ?? "")
-  }, [medicalNotes])
-
-  // Admin's RLS grant excludes this table entirely — nothing to show, and
-  // nothing they're allowed to write, so keep the card out of their view.
-  if (profile?.role === "admin") return null
-
-  async function handleSave() {
     if (!profile) return
-    setIsSaving(true)
     try {
-      await upsertMedicalNotes({
-        patient_id: patientId,
-        clinic_id: profile.clinic_id!,
-        notes,
-        updated_by: profile.id,
-      })
-      await queryClient.invalidateQueries({ queryKey: ["patient_medical_notes", patientId] })
-      toast.success("Tibbiy tarix saqlandi")
+      const tasks: Promise<unknown>[] = []
+      if (canEditInfo) {
+        tasks.push(
+          updatePatient(patientId, {
+            full_name: values.full_name,
+            phone: values.phone,
+            birth_date: values.birth_date || null,
+            address: values.address || null,
+          })
+        )
+      }
+      if (canSeeMedical) {
+        tasks.push(
+          upsertMedicalNotes({
+            patient_id: patientId,
+            clinic_id: profile.clinic_id!,
+            notes: values.medical_notes ?? "",
+            updated_by: profile.id,
+          })
+        )
+      }
+      await Promise.all(tasks)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["patient", patientId] }),
+        queryClient.invalidateQueries({ queryKey: ["patients"] }),
+        queryClient.invalidateQueries({ queryKey: ["patient_medical_notes", patientId] }),
+      ])
+      toast.success("Ma'lumotlar saqlandi")
     } catch (e) {
       toast.error(
         e instanceof Error
           ? e.message
-          : "Saqlashda xatolik. Faqat bemorga biriktirilgan shifokor yoza oladi."
+          : "Saqlashda xatolik. Faqat bemorga biriktirilgan shifokor tibbiy tarixni yoza oladi."
       )
-    } finally {
-      setIsSaving(false)
     }
+  }
+
+  if (patientLoading || !patient) {
+    return (
+      <Card>
+        <CardContent className="space-y-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldAlert className="size-4 text-warning" />
-          Allergiya / surunkali kasalliklar
-        </CardTitle>
+      <CardHeader className="flex-row items-center gap-3">
+        <Avatar size="lg">
+          <AvatarFallback className="bg-primary/10 text-primary font-medium">
+            {getInitials(patient.full_name)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0">
+          <p className="font-heading font-medium truncate">{patient.full_name}</p>
+          <p className="text-sm text-muted-foreground">
+            Birinchi tashrif: {format(new Date(patient.first_visit_date), "dd.MM.yyyy")}
+          </p>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {isLoading ? (
-          <Skeleton className="h-24 w-full" />
-        ) : (
-          <>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Masalan: penitsillinga allergiya, qandli diabet..."
-              rows={4}
-            />
-            <Button size="sm" onClick={handleSave} disabled={isSaving}>
-              Saqlash
-            </Button>
-          </>
-        )}
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="full_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ism-familiya</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" disabled={!canEditInfo} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefon</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" disabled={!canEditInfo} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="birth_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tug'ilgan sana</FormLabel>
+                    <FormControl>
+                      <DatePicker
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        disabled={!canEditInfo}
+                        fromYear={new Date().getFullYear() - 100}
+                        toYear={new Date().getFullYear()}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Manzil</FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" disabled={!canEditInfo} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {canSeeMedical && (
+              <>
+                <Separator />
+                <FormField
+                  control={form.control}
+                  name="medical_notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <ShieldAlert className="size-4 text-warning" />
+                        Allergiya / surunkali kasalliklar
+                      </FormLabel>
+                      <FormControl>
+                        {notesLoading ? (
+                          <Skeleton className="h-24 w-full" />
+                        ) : (
+                          <Textarea
+                            placeholder="Masalan: penitsillinga allergiya, qandli diabet..."
+                            rows={4}
+                            {...field}
+                          />
+                        )}
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            {(canEditInfo || canSeeMedical) && (
+              <div className="flex justify-end">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  Saqlash
+                </Button>
+              </div>
+            )}
+          </form>
+        </Form>
       </CardContent>
     </Card>
   )
@@ -239,6 +263,9 @@ function MedicalNotesCard({ patientId }: { patientId: string }) {
 export function PatientDetailPage() {
   const { patientId } = useParams<{ patientId: string }>()
   const { data: profile } = useProfile()
+  const { data: patient } = usePatient(patientId)
+  const canBookAppointment = profile?.role === "owner" || profile?.role === "admin"
+  const canSeeOdontogram = profile?.role === "owner" || profile?.role === "doctor"
 
   useEffect(() => {
     if (patientId && profile) {
@@ -254,23 +281,42 @@ export function PatientDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link to="/patients">
-          <ArrowLeft className="size-4" />
-          Bemorlar ro'yxatiga qaytish
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Link to="/patients">
+            <ArrowLeft className="size-4" />
+            Bemorlar ro'yxatiga qaytish
+          </Link>
+        </Button>
+        {canBookAppointment && patient && (
+          <NewAppointmentDialog
+            defaultDate={new Date()}
+            fixedPatient={{ id: patient.id, full_name: patient.full_name }}
+            trigger={
+              <Button size="sm">
+                <CalendarPlus className="size-4" />
+                Yangi qabul belgilash
+              </Button>
+            }
+          />
+        )}
+      </div>
 
       <Tabs defaultValue="info">
         <TabsList>
           <TabsTrigger value="info">Umumiy ma'lumot</TabsTrigger>
+          {canSeeOdontogram && <TabsTrigger value="teeth">Tish jadvali</TabsTrigger>}
           <TabsTrigger value="history">Tashriflar tarixi</TabsTrigger>
           <TabsTrigger value="treatment">Davolash va to'lov</TabsTrigger>
         </TabsList>
-        <TabsContent value="info" className="space-y-6 mt-4">
-          <PatientInfoForm patientId={patientId} />
-          <MedicalNotesCard patientId={patientId} />
+        <TabsContent value="info" className="mt-4">
+          <PatientInfoCard patientId={patientId} />
         </TabsContent>
+        {canSeeOdontogram && (
+          <TabsContent value="teeth" className="mt-4">
+            <PatientOdontogramTab patientId={patientId} />
+          </TabsContent>
+        )}
         <TabsContent value="history" className="mt-4">
           <PatientVisitHistory patientId={patientId} />
         </TabsContent>

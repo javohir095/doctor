@@ -25,7 +25,6 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -43,6 +42,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { formatUzPhone } from "@/shared/lib/phone"
+import { DatePicker } from "@/shared/ui/DatePicker"
 import { useProfile } from "@/entities/session/api/queries"
 import {
   updateAppointment,
@@ -249,12 +249,7 @@ export function AppointmentDetailSheet({
               >
                 <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-3">
                   <Label>Keyingi tashrif (qayta chaqiruv) sanasi</Label>
-                  <Input
-                    type="date"
-                    value={recallDate}
-                    onChange={(e) => setRecallDate(e.target.value)}
-                    disabled={!canEdit}
-                  />
+                  <DatePicker value={recallDate} onChange={setRecallDate} disabled={!canEdit} />
                 </div>
               </motion.div>
             )}
